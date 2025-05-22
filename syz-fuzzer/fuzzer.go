@@ -160,7 +160,7 @@ func main() {
 	defer tool.Init()()
 	outputType := parseOutputType(*flagOutput)
 	log.Logf(0, "fuzzer started")
-
+	// clhiker：在这里获取变异的代码
 	target, err := prog.GetTarget(*flagOS, *flagArch)
 	if err != nil {
 		log.SyzFatalf("%v", err)

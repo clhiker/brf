@@ -107,6 +107,7 @@ func GetTarget(OS, arch string) (*Target, error) {
 		sort.Strings(supported)
 		return nil, fmt.Errorf("unknown target: %v (supported: %v)", key, supported)
 	}
+	// clhiker 拿共享文件夹下的文件
 	target.init.Do(target.lazyInit)
 	return target, nil
 }

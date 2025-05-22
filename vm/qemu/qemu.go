@@ -644,6 +644,7 @@ func (inst *instance) Copy(hostSrc string) (string, error) {
 	return vmDst, nil
 }
 
+// clhker: 启动 fuzzer
 func (inst *instance) Run(timeout time.Duration, stop <-chan bool, command string) (
 	<-chan []byte, <-chan error, error) {
 	rpipe, wpipe, err := osutil.LongPipe()
@@ -654,6 +655,7 @@ func (inst *instance) Run(timeout time.Duration, stop <-chan bool, command strin
 
 	sshArgs := vmimpl.SSHArgsForward(inst.debug, inst.sshkey, inst.port, inst.forwardPort)
 	args := strings.Split(command, " ")
+
 	if bin := filepath.Base(args[0]); inst.target.HostFuzzer &&
 		(bin == "syz-fuzzer" || bin == "syz-execprog") {
 		// Weird mode for fuchsia and akaros.
@@ -676,6 +678,7 @@ func (inst *instance) Run(timeout time.Duration, stop <-chan bool, command strin
 	if inst.debug {
 		log.Logf(0, "running command: %#v", args)
 	}
+	// clhiker: 注意是启动的新进程，所以日志都不会打在这里
 	cmd := osutil.Command(args[0], args[1:]...)
 	cmd.Dir = inst.workdir
 	cmd.Stdout = wpipe

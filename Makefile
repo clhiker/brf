@@ -140,9 +140,16 @@ ifneq ("$(NO_CROSS_COMPILER)", "")
 	$(info ************************************************************************************)
 else
 	mkdir -p ./bin/$(TARGETOS)_$(TARGETARCH)
+#	$(CC) -o ./bin/$(TARGETOS)_$(TARGETARCH)/syz-executor$(EXE) executor/executor.cc \
+#		$(ADDCFLAGS) $(CFLAGS) -L/usr/local/lib64 -lbpf -lelf -lz -DGOOS_$(TARGETOS)=1 -DGOARCH_$(TARGETARCH)=1 \
+#		-DHOSTGOOS_$(HOSTOS)=1 -DGIT_REVISION=\"$(REV)\"
 	$(CC) -o ./bin/$(TARGETOS)_$(TARGETARCH)/syz-executor$(EXE) executor/executor.cc \
-		$(ADDCFLAGS) $(CFLAGS) -L/usr/local/lib64 -lbpf -lelf -lz -DGOOS_$(TARGETOS)=1 -DGOARCH_$(TARGETARCH)=1 \
-		-DHOSTGOOS_$(HOSTOS)=1 -DGIT_REVISION=\"$(REV)\"
+		$(ADDCFLAGS) $(CFLAGS) \
+		-I/home/clhiker/workspace/net-next/tools/lib \
+		-L/home/clhiker/workspace/net-next/tools/lib/bpf -lbpf \
+		-lelf -lz -DGOOS_$(TARGETOS)=-1 -DGOARCH_$(TARGETARCH)=1 \
+		-DHOSTGOOS_$(HOSTOS)=1 -DGIT_REVISION=\"$(REV)\" \
+		-Wno-unused-variable    # 关闭警告
 endif
 endif
 endif

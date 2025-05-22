@@ -10,8 +10,8 @@ import (
 )
 
 type BpfRuntimeFuzzer struct {
-	isEnabled     bool
-	workDir       string
+	isEnabled bool
+	workDir   string
 
 	helperFuncMap map[string]*BpfHelper
 	progTypeMap   map[BpfProgTypeEnum]*BpfProgType
@@ -21,13 +21,13 @@ type BpfRuntimeFuzzer struct {
 func NewBpfRuntimeFuzzer(enable bool) *BpfRuntimeFuzzer {
 	brf := new(BpfRuntimeFuzzer)
 
-	if (!enable) {
+	if !enable {
 		return brf
 	}
 
 	brf.workDir = "/mnt/brf_work_dir"
 	err := mountBrfWorkDir(brf.workDir)
-	if (err != nil) {
+	if err != nil {
 		return brf
 	}
 
@@ -44,24 +44,25 @@ func NewBpfRuntimeFuzzer(enable bool) *BpfRuntimeFuzzer {
 func mountBrfWorkDir(dir string) error {
 	var timeout time.Duration = 10000000000
 
-	err := os.Mkdir(dir, os.ModeDir)
-	if err != nil {
-		fmt.Printf("failed to create brf work dir: %v\n", err)
-		return err
-	}
-
-	args := []string{"-t", "9p", "-o", "trans=virtio,version=9p2000.L", "brf", dir}
-	_, err = osutil.RunCmd(timeout, "", "mount", args...)
-	if err != nil {
-		fmt.Printf("failed to mount brf work dir: %v\n", err)
-		return err
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		err := os.Mkdir(dir, os.ModeDir)
+		if err != nil {
+			fmt.Printf("failed to create brf work dir: %v\n", err)
+			return err
+		}
+		args := []string{"-t", "9p", "-o", "trans=virtio,version=9p2000.L", "brf", dir}
+		_, err = osutil.RunCmd(timeout, "", "mount", args...)
+		if err != nil {
+			fmt.Printf("failed to mount brf work dir: %v\n", err)
+			return err
+		}
 	}
 	return nil
 }
 
-func (brf *BpfRuntimeFuzzer) IsEnabled() bool {
-	return brf.isEnabled
-}
+//func (brf *BpfRuntimeFuzzer) IsEnabled() bool {
+//	return brf.isEnabled
+//}
 
 func (brf *BpfRuntimeFuzzer) GenPrologue(r *randGen, s *state, prog *Prog) {
 	var p *BpfProg
@@ -184,7 +185,7 @@ func (brf *BpfRuntimeFuzzer) genSeedBpfProg(r *randGen) *BpfProg {
 	var p *BpfProg
 	var ok bool
 
-//	opt.useTestSrc = true
+	//	opt.useTestSrc = true
 	opt.genProgAttempt = 20
 	opt.basePath = brf.workDir
 
@@ -204,7 +205,7 @@ func (brf *BpfRuntimeFuzzer) genSeedBpfProg(r *randGen) *BpfProg {
 			fmt.Printf("failed to serialize bpf program: %v\n", err)
 			return nil
 		}
-
+		// clhiker: 经过编译的bpf程序
 		if err := brf.compileBpfProg(p); err != nil {
 			fmt.Printf("failed to compile bpf program: %v\n", err)
 			continue
@@ -214,53 +215,53 @@ func (brf *BpfRuntimeFuzzer) genSeedBpfProg(r *randGen) *BpfProg {
 	return nil
 }
 
-func (brf *BpfRuntimeFuzzer) mutSeedBpfProg(r *randGen, path string) *BpfProg {
-	var opt BrfGenProgOpt
-	var p *BpfProg
+//func (brf *BpfRuntimeFuzzer) mutSeedBpfProg(r *randGen, path string) *BpfProg {
+//	var opt BrfGenProgOpt
+//	var p *BpfProg
+//
+//	//	opt.useTestSrc = true
+//	opt.genProgAttempt = 20
+//	opt.basePath = brf.workDir
+//
+//	p = NewBpfProg(nil, nil, opt)
+//	p.readGob(path)
+//	p.pt = brf.progTypeMap[p.TypeEnum]
+//
+//	for i := 0; i < opt.genProgAttempt; i++ {
+//		for ok := false; !ok; {
+//			ok = brf.MutBpfProg(r, p, opt)
+//		}
+//		p.FixRef(r)
+//		p.FixSpinLock(r)
+//
+//		if err := p.writeCSource(); err != nil {
+//			fmt.Printf("failed to write bpf program c source: %v\n", err)
+//			return nil
+//		}
+//
+//		if err := p.writeGob(); err != nil {
+//			fmt.Printf("failed to serialize bpf program: %v\n", err)
+//			return nil
+//		}
+//
+//		if err := brf.compileBpfProg(p); err != nil {
+//			fmt.Printf("failed to compile bpf program: %v\n", err)
+//			continue
+//		}
+//		return p
+//	}
+//	return nil
+//}
 
-//	opt.useTestSrc = true
-	opt.genProgAttempt = 20
-	opt.basePath = brf.workDir
+//func (brf *BpfRuntimeFuzzer) genBpfProg(r *randGen, opt BrfGenProgOpt) (*BpfProg, bool) {
+//	p := newBpfProg(r, opt)
+//
+//	return p, true
+//}
 
-	p = NewBpfProg(nil, nil, opt)
-	p.readGob(path)
-	p.pt = brf.progTypeMap[p.TypeEnum]
-
-	for i := 0; i < opt.genProgAttempt; i++ {
-		for ok := false; !ok; {
-			ok = brf.MutBpfProg(r, p, opt)
-		}
-		p.FixRef(r)
-		p.FixSpinLock(r)
-
-		if err := p.writeCSource(); err != nil {
-			fmt.Printf("failed to write bpf program c source: %v\n", err)
-			return nil
-		}
-
-		if err := p.writeGob(); err != nil {
-			fmt.Printf("failed to serialize bpf program: %v\n", err)
-			return nil
-		}
-
-		if err := brf.compileBpfProg(p); err != nil {
-			fmt.Printf("failed to compile bpf program: %v\n", err)
-			continue
-		}
-		return p
-	}
-	return nil
-}
-
-func (brf *BpfRuntimeFuzzer) genBpfProg(r *randGen, opt BrfGenProgOpt) (*BpfProg, bool) {
-	p := newBpfProg(r, opt)
-
-	return p, true
-}
-
-func (brf *BpfRuntimeFuzzer) mutBpfProg(r *randGen, p *BpfProg, opt BrfGenProgOpt) bool {
-	return true
-}
+//func (brf *BpfRuntimeFuzzer) mutBpfProg(r *randGen, p *BpfProg, opt BrfGenProgOpt) bool {
+//	return true
+//}
 
 func (brf *BpfRuntimeFuzzer) compileBpfProg(p *BpfProg) error {
 	var timeout time.Duration = 10000000000
@@ -272,8 +273,8 @@ func (brf *BpfRuntimeFuzzer) compileBpfProg(p *BpfProg) error {
 		"-Wno-compare-distinct-pointer-types",
 		"-Wno-int-conversion",
 		"-O2", "-target", "bpf", "-mcpu=v3",
-		"-c", p.BasePath + ".c",
-		"-o", p.BasePath + ".o")
+		"-c", p.BasePath+".c",
+		"-o", p.BasePath+".o")
 	cmd.Dir = brf.workDir
 
 	_, err := osutil.Run(timeout, cmd)

@@ -144,6 +144,7 @@ type Crash struct {
 	machineInfo []byte
 }
 
+// clhker：程序启动位置
 func main() {
 	if prog.GitRevision == "" {
 		log.Fatalf("bad syz-manager build: build with make, run bin/syz-manager")
@@ -205,6 +206,7 @@ func RunManager(cfg *mgrconfig.Config) {
 		saturatedCalls:   make(map[string]bool),
 	}
 
+	// clhiker: 从这里加载数据库中的种子，后面还有900多个手写种子
 	mgr.preloadCorpus()
 	mgr.initStats() // Initializes prometheus variables.
 	mgr.initHTTP()  // Creates HTTP server.
@@ -229,7 +231,7 @@ func RunManager(cfg *mgrconfig.Config) {
 			log.Fatalf("failed to init asset storage: %v", err)
 		}
 	}
-
+	// clhiker: 定时器每10s查看执行结果
 	go func() {
 		for lastTime := time.Now(); ; {
 			time.Sleep(10 * time.Second)
@@ -273,6 +275,7 @@ func RunManager(cfg *mgrconfig.Config) {
 		<-vm.Shutdown
 		return
 	}
+	// clhiker 启动该虚拟机
 	mgr.vmLoop()
 }
 
@@ -393,6 +396,7 @@ func (mgr *Manager) vmLoop() {
 				}
 				log.Logf(1, "loop: starting instance %v", *idx)
 				go func() {
+					// clhiker：在此处执行虚拟机的fuzzer
 					crash, err := mgr.runInstance(*idx)
 					runDone <- &RunResult{*idx, crash, err}
 				}()
@@ -830,6 +834,7 @@ func (mgr *Manager) runInstanceInner(index int, instanceName string) (*report.Re
 		},
 	}
 	cmd := instance.FuzzerCmd(args)
+	// clhiker 在虚拟机fuzzer
 	outc, errc, err := inst.Run(mgr.cfg.Timeouts.VMRunningTime, mgr.vmStop, cmd)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to run fuzzer: %w", err)

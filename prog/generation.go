@@ -9,13 +9,14 @@ import (
 
 // Generate generates a random program with ncalls calls.
 // ct contains a set of allowed syscalls, if nil all syscalls are used.
+// clhiker: 在 proc.go 中调用
 func (target *Target) Generate(rs rand.Source, ncalls int, ct *ChoiceTable) *Prog {
 	p := &Prog{
 		Target: target,
 	}
 	r := newRand(target, rs)
 	s := newState(target, ct, nil)
-	target.Brf.GenPrologue(r, s, p)
+	target.Brf.GenPrologue(r, s, p) // clhiekr:增加bpf程序的生成
 	for len(p.Calls) < ncalls {
 		calls := r.generateCall(s, p, len(p.Calls))
 		for _, c := range calls {

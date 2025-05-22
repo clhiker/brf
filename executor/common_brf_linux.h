@@ -221,9 +221,9 @@ static int bpf_program_attach(struct bpf_program *prog, int res, struct bpf_link
 		goto check_link;
 	case BPF_PROG_TYPE_SYSCALL:
 		break;
-	case BPF_PROG_TYPE_NETFILTER:
-		*link = bpf_program__attach_netfilter(prog, &nf_opts);
-		goto check_link;
+//	case BPF_PROG_TYPE_NETFILTER:
+//		*link = bpf_program__attach_netfilter(prog, &nf_opts);
+//		goto check_link;
 	default:
 		break;
 	}
