@@ -144,46 +144,77 @@ func createIPCConfig(features *host.Features, config *ipc.Config) {
 
 // nolint: funlen
 func main() {
+	// 设置垃圾回收器的触发阈值为50%
 	debug.SetGCPercent(50)
 
+	// 定义命令行参数
 	var (
-		flagName     = flag.String("name", "test", "unique name for manager")
-		flagOS       = flag.String("os", runtime.GOOS, "target OS")
-		flagArch     = flag.String("arch", runtime.GOARCH, "target arch")
-		flagManager  = flag.String("manager", "", "manager rpc address")
-		flagProcs    = flag.Int("procs", 1, "number of parallel test processes")
-		flagOutput   = flag.String("output", "stdout", "write programs to none/stdout/dmesg/file")
-		flagTest     = flag.Bool("test", false, "enable image testing mode")      // used by syz-ci
-		flagRunTest  = flag.Bool("runtest", false, "enable program testing mode") // used by pkg/runtest
+		// 为管理器设置唯一名称，默认为"test"
+		flagName = flag.String("name", "test", "unique name for manager")
+		// 设置目标操作系统，默认为当前系统
+		flagOS = flag.String("os", runtime.GOOS, "target OS")
+		// 设置目标架构，默认为当前架构
+		flagArch = flag.String("arch", runtime.GOARCH, "target arch")
+		// 设置管理器RPC地址
+		flagManager = flag.String("manager", "", "manager rpc address")
+		// 设置并行测试进程数，默认为1
+		flagProcs = flag.Int("procs", 1, "number of parallel test processes")
+		// 设置输出方式，可选none/stdout/dmesg/file，默认为stdout
+		flagOutput = flag.String("output", "stdout", "write programs to none/stdout/dmesg/file")
+		// 启用镜像测试模式（用于syz-ci）
+		flagTest = flag.Bool("test", false, "enable image testing mode")
+		// 启用程序测试模式（用于pkg/runtest）
+		flagRunTest = flag.Bool("runtest", false, "enable program testing mode")
+		// 是否获取原始覆盖率数据
 		flagRawCover = flag.Bool("raw_cover", false, "fetch raw coverage")
 	)
+
+	// 初始化工具
 	defer tool.Init()()
+
+	// 解析输出类型
 	outputType := parseOutputType(*flagOutput)
+
+	// 记录fuzzer启动日志
 	log.Logf(0, "fuzzer started")
-	// clhiker：在这里获取变异的代码
+
+	// 获取目标系统信息
 	target, err := prog.GetTarget(*flagOS, *flagArch)
 	if err != nil {
 		log.SyzFatalf("%v", err)
 	}
 
+	// 创建默认IPC配置和执行选项
 	config, execOpts, err := ipcconfig.Default(target)
 	if err != nil {
 		log.SyzFatalf("failed to create default ipc config: %v", err)
 	}
+
+	// 如果启用了原始覆盖率，则禁用覆盖率去重
 	if *flagRawCover {
 		execOpts.Flags &^= ipc.FlagDedupCover
 	}
+
+	// 获取超时设置
 	timeouts := config.Timeouts
+
+	// 获取沙箱类型
 	sandbox := ipc.FlagsToSandbox(config.Flags)
+
+	// 创建关闭通道
 	shutdown := make(chan struct{})
+
+	// 处理中断信号
 	osutil.HandleInterrupts(shutdown)
+
+	// 处理GCE优雅抢占
 	go func() {
-		// Handles graceful preemption on GCE.
 		<-shutdown
 		log.Logf(0, "SYZ-FUZZER: PREEMPTED")
 		os.Exit(1)
 	}()
 
+	// 创建检查参数
 	checkArgs := &checkArgs{
 		target:         target,
 		sandbox:        sandbox,
@@ -192,44 +223,66 @@ func main() {
 		gitRevision:    prog.GitRevision,
 		targetRevision: target.Revision,
 	}
+
+	// 如果是测试模式，执行测试镜像
 	if *flagTest {
 		testImage(*flagManager, checkArgs)
 		return
 	}
 
+	// 收集机器信息和模块信息
 	machineInfo, modules := collectMachineInfos(target)
 
+	// 记录连接管理器日志
 	log.Logf(0, "dialing manager at %v", *flagManager)
+
+	// 创建RPC客户端
 	manager, err := rpctype.NewRPCClient(*flagManager, timeouts.Scale)
 	if err != nil {
 		log.SyzFatalf("failed to create an RPC client: %v ", err)
 	}
 
+	// 记录连接管理器日志
 	log.Logf(1, "connecting to manager...")
+
+	// 准备连接参数
 	a := &rpctype.ConnectArgs{
 		Name:        *flagName,
 		MachineInfo: machineInfo,
 		Modules:     modules,
 	}
+
+	// 创建连接响应
 	r := &rpctype.ConnectRes{}
+
+	// 调用管理器的Connect方法
 	if err := manager.Call("Manager.Connect", a, r); err != nil {
 		log.SyzFatalf("failed to call Manager.Connect(): %v ", err)
 	}
+
+	// 解析特性标志
 	featureFlags, err := csource.ParseFeaturesFlags("none", "none", true)
 	if err != nil {
 		log.SyzFatalf("%v", err)
 	}
+
+	// 处理覆盖率过滤位图
 	if r.CoverFilterBitmap != nil {
 		if err := osutil.WriteFile("syz-cover-bitmap", r.CoverFilterBitmap); err != nil {
 			log.SyzFatalf("failed to write syz-cover-bitmap: %v", err)
 		}
 	}
+
+	// 检查结果处理
 	if r.CheckResult == nil {
+		// 设置检查参数
 		checkArgs.gitRevision = r.GitRevision
 		checkArgs.targetRevision = r.TargetRevision
 		checkArgs.enabledCalls = r.EnabledCalls
 		checkArgs.allSandboxes = r.AllSandboxes
 		checkArgs.featureFlags = featureFlags
+
+		// 执行机器检查
 		r.CheckResult, err = checkMachine(checkArgs)
 		if err != nil {
 			if r.CheckResult == nil {
@@ -237,25 +290,41 @@ func main() {
 			}
 			r.CheckResult.Error = err.Error()
 		}
+
+		// 设置检查结果名称
 		r.CheckResult.Name = *flagName
+
+		// 调用管理器的Check方法
 		if err := manager.Call("Manager.Check", r.CheckResult, nil); err != nil {
 			log.SyzFatalf("Manager.Check call failed: %v", err)
 		}
+
+		// 检查错误
 		if r.CheckResult.Error != "" {
 			log.SyzFatalf("%v", r.CheckResult.Error)
 		}
 	} else {
+		// 更新全局文件
 		target.UpdateGlobs(r.CheckResult.GlobFiles)
+
+		// 设置主机
 		if err = host.Setup(target, r.CheckResult.Features, featureFlags, config.Executor); err != nil {
 			log.SyzFatalf("%v", err)
 		}
 	}
+
+	// 记录系统调用数量
 	log.Logf(0, "syscalls: %v", len(r.CheckResult.EnabledCalls[sandbox]))
+
+	// 记录支持的特性
 	for _, feat := range r.CheckResult.Features.Supported() {
 		log.Logf(0, "%v: %v", feat.Name, feat.Reason)
 	}
+
+	// 创建IPC配置
 	createIPCConfig(r.CheckResult.Features, config)
 
+	// 如果是运行测试模式，执行测试—— clhiker: 我们直接使用运行测试模式
 	if *flagRunTest {
 		runTest(target, manager, *flagName, config.Executor)
 		return
@@ -263,6 +332,7 @@ func main() {
 
 	needPoll := make(chan struct{}, 1)
 	needPoll <- struct{}{}
+	// 创建Fuzzer实例
 	fuzzer := &Fuzzer{
 		name:                     *flagName,
 		outputType:               outputType,
@@ -281,26 +351,33 @@ func main() {
 		noMutate:                 r.NoMutateCalls,
 		stats:                    make([]uint64, StatCount),
 	}
+	// 设置bug帧回调
 	gateCallback := fuzzer.useBugFrames(r, *flagProcs)
 	fuzzer.gate = ipc.NewGate(2**flagProcs, gateCallback)
 
+	// 轮询获取语料库
 	for needCandidates, more := true, true; more; needCandidates = false {
 		more = fuzzer.poll(needCandidates, nil)
-		// This loop lead to "no output" in qemu emulation, tell manager we are not dead.
+		// 该循环在qemu仿真下会导致"no output"，所以定期向manager报告存活状态
 		log.Logf(0, "fetching corpus: %v, signal %v/%v (executing program)",
 			len(fuzzer.corpus), len(fuzzer.corpusSignal), len(fuzzer.maxSignal))
 	}
+	// 创建系统调用映射
 	calls := make(map[*prog.Syscall]bool)
 	for _, id := range r.CheckResult.EnabledCalls[sandbox] {
 		calls[target.Syscalls[id]] = true
 	}
+	// 构建选择表
 	fuzzer.choiceTable = target.BuildChoiceTable(fuzzer.corpus, calls)
 
+	// 如果存在覆盖率过滤位图，启用覆盖率过滤
 	if r.CoverFilterBitmap != nil {
 		fuzzer.execOpts.Flags |= ipc.FlagEnableCoverageFilter
 	}
 
+	// 记录启动fuzzer进程日志
 	log.Logf(0, "starting %v fuzzer processes", *flagProcs)
+	// 启动工作进程
 	for pid := 0; pid < *flagProcs; pid++ {
 		proc, err := newProc(fuzzer, pid)
 		if err != nil {
@@ -310,6 +387,7 @@ func main() {
 		go proc.loop()
 	}
 
+	// 进入主循环
 	fuzzer.pollLoop()
 }
 

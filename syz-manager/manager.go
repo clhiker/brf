@@ -602,6 +602,7 @@ func (mgr *Manager) preloadCorpus() {
 	}
 	mgr.corpusDB = corpusDB
 
+	// clhiker：从 /sys/linux/test 中拿种子
 	if seedDir := filepath.Join(mgr.cfg.Syzkaller, "sys", mgr.cfg.TargetOS, "test"); osutil.IsExist(seedDir) {
 		seeds, err := os.ReadDir(seedDir)
 		if err != nil {
@@ -617,7 +618,9 @@ func (mgr *Manager) preloadCorpus() {
 	}
 }
 
+// clhiker：已弃用
 func (mgr *Manager) loadCorpus() {
+	fmt.Println("---------loadCorpus???")
 	// By default we don't re-minimize/re-smash programs from corpus,
 	// it takes lots of time on start and is unnecessary.
 	// However, on version bumps we can selectively re-minimize/re-smash.
